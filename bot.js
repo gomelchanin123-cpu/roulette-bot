@@ -47,26 +47,37 @@ async function main() {
     console.log('🌐 Открываем сайт...');
     await page.goto(SITE_URL, { waitUntil: 'networkidle', timeout: 60000 });
 
-    console.log('🔐 Логинимся...');
-    try {
-        await page.click('[data-test="login-button"], button:has-text("Войти"), button:has-text("Login")', { timeout: 10000 });
-        await page.waitForTimeout(1500);
-    } catch (e) {
-        console.log('Кнопка входа не найдена, пробуем поля напрямую...');
-    }
+    console.log('🔐 Кликаем кнопку входа...');
+    await page.click('a.tb--access-btn[href*="login"]');
+    await page.waitForTimeout(3000);
 
-    try {
-        await page.waitForSelector('input[type="email"], input[name="email"], input[name="login"]', { timeout: 10000 });
-        await page.fill('input[type="email"], input[name="email"], input[name="login"]', LOGIN);
-        await page.fill('input[type="password"]', PASSWORD);
-        await page.click('button[type="submit"]');
-        await page.waitForTimeout(5000);
-        console.log('✅ Вошли в аккаунт');
-    } catch (e) {
-        console.error('❌ Ошибка логина:', e.message);
-        await sendTelegram('❌ Ошибка авторизации, нужна помощь!');
+    console.log('🔐 Ищем iframe логина...');
+    await page.waitForSelector('iframe[src*="login.html"]', { timeout: 15000 });
+
+    const loginFrameHandle = await page.$('iframe[src*="login.html"]');
+    const loginFrame = await loginFrameHandle.contentFrame();
+
+    if (!loginFrame) {
+        await sendTelegram('❌ iframe логина не найден!');
         return;
     }
+
+    console.log('🔐 Вводим данные...');
+    await loginFrame.waitForSelector('input', { timeout: 10000 });
+    const inputs = await loginFrame.$$('input');
+    await inputs[0].fill(LOGIN);
+    await inputs[1].fill(PASSWORD);
+
+    const submitBtn = await loginFrame.$('button[type="submit"], button:has-text("Войти"), input[type="submit"]');
+    if (submitBtn) {
+        await submitBtn.click();
+    } else {
+        const btns = await loginFrame.$$('button');
+        await btns[btns.length - 1].click();
+    }
+
+    await page.waitForTimeout(5000);
+    console.log('✅ Вошли в аккаунт');
 
     console.log('⏳ Ждём рулетку...');
     try {
